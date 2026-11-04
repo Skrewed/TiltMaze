@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Backgrounds -->
+    <color name="bg_dark">#121316</color>
+    <color name="bg_surface">#1B1D22</color>
+    <color name="bg_surface_stroke">#2B2E36</color>
+    <color name="maze_bg">#15171B</color>
+
+    <!-- Maze Elements -->
+    <color name="maze_wall">#2D313A</color>
+    <color name="maze_wall_inner">#383D48</color>
+    <color name="ball_color">#00E5FF</color>
+    <color name="ball_glow">#4000E5FF</color>
+    <color name="target_color">#00E676</color>
+    <color name="target_glow">#4000E676</color>
+    <color name="start_marker">#3A3F4D</color>
+
+    <!-- Typography -->
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#8E95A5</color>
+    <color name="text_muted">#555B68</color>
+
+    <!-- Actions / Buttons -->
+    <color name="btn_start_bg">#00E5FF</color>
+    <color name="btn_start_text">#0D1318</color>
+    <color name="btn_start_pressed">#00B8D4</color>
+
+    <color name="btn_exit_bg">#1E2026</color>
+    <color name="btn_exit_stroke">#343844</color>
+    <color name="btn_exit_text">#D2D7E0</color>
+    <color name="btn_exit_pressed">#282B33</color>
+
+    <color name="btn_hud_bg">#1E2026</color>
+    <color name="btn_hud_stroke">#2D313B</color>
+    <color name="btn_hud_text">#B0B7C3</color>
+</resources>

@@ -1,0 +1,22 @@
+<resources>
+    <string name="app_name">Labirinto</string>
+    <string name="menu_title">LABIRINTO</string>
+    <string name="menu_subtitle">Tilt Maze • Controle por Inclinação</string>
+    <string name="btn_start">INICIAR</string>
+    <string name="btn_exit">SAIR</string>
+    <string name="hud_level">FASE %1$d</string>
+    <string name="hud_time">TEMPO: %1$s</string>
+    <string name="dialog_win_title">FASE CONCLUÍDA!</string>
+    <string name="dialog_win_message">Excelente! Você concluiu em %1$s</string>
+    <string name="btn_next_level">PRÓXIMA FASE</string>
+    <string name="btn_menu">MENU</string>
+    <string name="btn_restart">REINICIAR</string>
+    <string name="btn_calibrate">CALIBRAR</string>
+    <string name="btn_axes">EIXOS</string>
+    <string name="dialog_axes_title">Ajuste de Eixos do Giroscópio</string>
+    <string name="invert_pitch">Inverter Vertical (Frente / Trás)</string>
+    <string name="invert_roll">Inverter Horizontal (Esquerda / Direita)</string>
+    <string name="btn_close">Fechar</string>
+    <string name="toast_calibrated">Centro calibrado na posição atual!</string>
+    <string name="sensor_warning">Sensor de rotação/giroscópio não disponível.</string>
+</resources>
