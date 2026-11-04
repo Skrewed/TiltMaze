@@ -18,11 +18,13 @@ import com.labirinto.tiltmaze.view.VisaoJogo;
 
 import java.util.Locale;
 
-// Tela principal da partida (GameActivity).
-// Gerencia os sensores, o cronômetro, a HUD superior e o diálogo de vitória.
+// Tela principal da partida (ActivityJogo).
+// Gerencia a campanha completa de 15 fases, os sensores, o cronômetro, a HUD superior
+// e os diálogos de vitória de fase e do jogo zerado.
 public class ActivityJogo extends AppCompatActivity implements VisaoJogo.ListenerEstadoJogo {
 
-    // Constantes pra salvar no SharedPreferences as escolhas de inversão de eixo
+    public static final int TOTAL_FASES = 15; // O jogo terá exatamente 15 fases
+
     private static final String PREFS_NAME = "tilt_maze_prefs";
     private static final String KEY_INVERT_Y = "invert_y";
     private static final String KEY_INVERT_X = "invert_x";
@@ -33,13 +35,15 @@ public class ActivityJogo extends AppCompatActivity implements VisaoJogo.Listene
     private TextView tvHudLevel;
     private TextView tvHudTimer;
     private FrameLayout overlayVictory;
+    private TextView tvWinTitle;
     private TextView tvWinTime;
+    private Button btnNextLevel;
 
     private int faseAtual = 1;
     private long tempoInicioFase = 0;
     private boolean isTimerRunning = false;
 
-    // Handler pra atualizar o texto do cronômetro a cada 100 milissegundos
+    // Handler pra atualizar o cronômetro na UI a cada 100ms
     private final Handler timerHandler = new Handler(Looper.getMainLooper());
     private final Runnable timerRunnable = new Runnable() {
         @Override
@@ -57,28 +61,26 @@ public class ActivityJogo extends AppCompatActivity implements VisaoJogo.Listene
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_game);
 
-        // Amarração dos componentes do layout XML
         visaoJogo = findViewById(R.id.gameView);
         tvHudLevel = findViewById(R.id.tvHudLevel);
         tvHudTimer = findViewById(R.id.tvHudTimer);
         overlayVictory = findViewById(R.id.overlayVictory);
+        tvWinTitle = findViewById(R.id.tvWinTitle);
         tvWinTime = findViewById(R.id.tvWinTime);
 
         Button btnHudMenu = findViewById(R.id.btnHudMenu);
-        Button btnHudCalibrate = findViewById(R.id.btnHudCalibrate);
-        Button btnHudAxes = findViewById(R.id.btnHudAxes);
         Button btnHudRestart = findViewById(R.id.btnHudRestart);
-        Button btnNextLevel = findViewById(R.id.btnNextLevel);
+        btnNextLevel = findViewById(R.id.btnNextLevel);
         Button btnOverlayMenu = findViewById(R.id.btnOverlayMenu);
 
-        // Carrega as configurações que o usuário salvou antes
+        // Carrega as preferências salvas
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         boolean savedInvertY = prefs.getBoolean(KEY_INVERT_Y, false);
         boolean savedInvertX = prefs.getBoolean(KEY_INVERT_X, false);
         visaoJogo.setInvertY(savedInvertY);
         visaoJogo.setInvertX(savedInvertX);
 
-        // Inicia o giroscópio e passa pro SurfaceView
+        // Inicializa giroscópio e sensores
         controladorSensores = new ControladorSensores(this);
         visaoJogo.setSensorHandler(controladorSensores);
         visaoJogo.setGameStateListener(this);
@@ -87,113 +89,85 @@ public class ActivityJogo extends AppCompatActivity implements VisaoJogo.Listene
             Toast.makeText(this, R.string.sensor_warning, Toast.LENGTH_LONG).show();
         }
 
-        // Botão de voltar pro menu inicial
+        // Botões do HUD minimalista
         btnHudMenu.setOnClickListener(v -> finish());
-
-        // Botão de calibrar a posição que o jogador tá segurando o celular
-        btnHudCalibrate.setOnClickListener(v -> {
-            controladorSensores.calibrate();
-            Toast.makeText(ActivityJogo.this, R.string.toast_calibrated, Toast.LENGTH_SHORT).show();
-        });
-
-        // Botão pra abrir o diálogo de inverter eixos
-        btnHudAxes.setOnClickListener(v -> showAxesDialog());
-
-        // Botão de reiniciar a fase atual
         btnHudRestart.setOnClickListener(v -> restartLevel());
-
-        // Botões do diálogo quando o cara ganha a fase
-        btnNextLevel.setOnClickListener(v -> {
-            faseAtual++;
-            startLevel(faseAtual);
-        });
-
         btnOverlayMenu.setOnClickListener(v -> finish());
 
-        // Começa na fase 1
+        // Inicia na fase 1
         startLevel(faseAtual);
     }
 
-    // Abre um AlertDialog com checkbox pra inverter os eixos se o cara quiser
-    private void showAxesDialog() {
-        visaoJogo.pauseGame();
-
-        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        boolean currentInvertY = prefs.getBoolean(KEY_INVERT_Y, false);
-        boolean currentInvertX = prefs.getBoolean(KEY_INVERT_X, false);
-
-        String[] options = new String[]{
-                getString(R.string.invert_pitch),
-                getString(R.string.invert_roll)
-        };
-        boolean[] checkedItems = new boolean[]{currentInvertY, currentInvertX};
-
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.dialog_axes_title)
-                .setMultiChoiceItems(options, checkedItems, (dialog, which, isChecked) -> {
-                    checkedItems[which] = isChecked;
-                })
-                .setPositiveButton(R.string.btn_close, (dialog, which) -> {
-                    boolean newInvertY = checkedItems[0];
-                    boolean newInvertX = checkedItems[1];
-
-                    // Grava as preferências no banco local do app (SharedPreferences)
-                    prefs.edit()
-                            .putBoolean(KEY_INVERT_Y, newInvertY)
-                            .putBoolean(KEY_INVERT_X, newInvertX)
-                            .apply();
-
-                    visaoJogo.setInvertY(newInvertY);
-                    visaoJogo.setInvertX(newInvertX);
-                })
-                .setOnDismissListener(dialog -> {
-                    if (overlayVictory.getVisibility() != View.VISIBLE) {
-                        visaoJogo.resumeGame();
-                    }
-                })
-                .show();
-    }
-
-    // Inicia uma nova fase e reseta o cronômetro
     private void startLevel(int level) {
+        // Pausa o loop da física pra não dar race condition na troca de mapa
+        visaoJogo.pauseGame();
         overlayVictory.setVisibility(View.GONE);
         tvHudLevel.setText(getString(R.string.hud_level, level));
 
+        // Inicializa a fase e posiciona a bolinha no spawn
+        visaoJogo.startLevel(level);
+
         tempoInicioFase = System.currentTimeMillis();
         isTimerRunning = true;
         timerHandler.removeCallbacks(timerRunnable);
         timerHandler.post(timerRunnable);
 
-        visaoJogo.startLevel(level);
+        // Retoma a física com tudo pronto
         visaoJogo.resumeGame();
     }
 
-    // Reinicia a fase atual
     private void restartLevel() {
+        visaoJogo.pauseGame();
         overlayVictory.setVisibility(View.GONE);
-        tempoInicioFase = System.currentTimeMillis();
-        isTimerRunning = true;
-        timerHandler.removeCallbacks(timerRunnable);
-        timerHandler.post(timerRunnable);
 
         visaoJogo.restartCurrentLevel();
+
+        tempoInicioFase = System.currentTimeMillis();
+        isTimerRunning = true;
+        timerHandler.removeCallbacks(timerRunnable);
+        timerHandler.post(timerRunnable);
+
         visaoJogo.resumeGame();
     }
 
-    // Chamado pelo motor de jogo quando a bolinha atinge a saída
+    // Chamado quando a bolinha atinge o objetivo
     @Override
     public void onLevelCompleted(int level) {
+        long tempoFinal = System.currentTimeMillis() - tempoInicioFase;
+
+        // Trava anti-bug: se completou em menos de 350ms, é resquício da fase anterior na troca de mapa. Ignora!
+        if (tempoFinal < 350) {
+            return;
+        }
+
+        // Pausa a física pra bolinha não ficar rodando debaixo do diálogo de vitória
+        visaoJogo.pauseGame();
         isTimerRunning = false;
         timerHandler.removeCallbacks(timerRunnable);
-
-        long tempoFinal = System.currentTimeMillis() - tempoInicioFase;
         String formatado = formatTime(tempoFinal);
 
-        tvWinTime.setText(getString(R.string.dialog_win_message, formatado));
+        // Se chegou e venceu a 15ª fase, Zerou o Jogo!
+        if (level >= TOTAL_FASES) {
+            tvWinTitle.setText(R.string.game_completed_title);
+            tvWinTime.setText(getString(R.string.game_completed_message, formatado));
+            btnNextLevel.setText(R.string.btn_play_again);
+            btnNextLevel.setOnClickListener(v -> {
+                faseAtual = 1;
+                startLevel(faseAtual);
+            });
+        } else {
+            tvWinTitle.setText(R.string.dialog_win_title);
+            tvWinTime.setText(getString(R.string.dialog_win_message, formatado));
+            btnNextLevel.setText(R.string.btn_next_level);
+            btnNextLevel.setOnClickListener(v -> {
+                faseAtual++;
+                startLevel(faseAtual);
+            });
+        }
+
         overlayVictory.setVisibility(View.VISIBLE);
     }
 
-    // Formata milissegundos para string bonita MM:SS.D
     private String formatTime(long millis) {
         long seconds = (millis / 1000) % 60;
         long minutes = (millis / (1000 * 60)) % 60;
@@ -201,7 +175,6 @@ public class ActivityJogo extends AppCompatActivity implements VisaoJogo.Listene
         return String.format(Locale.getDefault(), "%02d:%02d.%d", minutes, seconds, tenths);
     }
 
-    // Ciclo de vida: quando volta pro app, religa os sensores
     @Override
     protected void onResume() {
         super.onResume();
@@ -217,7 +190,6 @@ public class ActivityJogo extends AppCompatActivity implements VisaoJogo.Listene
         }
     }
 
-    // Ciclo de vida: quando o app vai pro segundo plano, desliga o sensor pra economizar bateria
     @Override
     protected void onPause() {
         super.onPause();

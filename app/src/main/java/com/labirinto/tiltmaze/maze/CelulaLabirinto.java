@@ -2,6 +2,7 @@ package com.labirinto.tiltmaze.maze;
 
 // Célula básica da grade do labirinto.
 // Cada quadradinho tem 4 paredes (cima, direita, baixo, esquerda).
+// A partir da fase 8, as paredes ganham flags de alerta pra avisar quando vão se mover!
 public class CelulaLabirinto {
     // Posição da célula na matriz (coluna e linha)
     public final int col;
@@ -12,6 +13,12 @@ public class CelulaLabirinto {
     public boolean rightWall = true;
     public boolean bottomWall = true;
     public boolean leftWall = true;
+
+    // Avisos visuais de alerta (pisca em âmbar) quando a parede vai abrir ou fechar
+    public boolean topWallAlert = false;
+    public boolean rightWallAlert = false;
+    public boolean bottomWallAlert = false;
+    public boolean leftWallAlert = false;
 
     // Pra saber se a busca do algoritmo já passou por aqui
     public boolean visited = false;
@@ -26,19 +33,40 @@ public class CelulaLabirinto {
         int diffCol = this.col - other.col;
         int diffRow = this.row - other.row;
 
-        // Se a outra tá na esquerda, abre minha parede esquerda e a direita dela
-        if (diffCol == 1) {
+        if (diffCol == 1) { // other tá na esquerda
             this.leftWall = false;
             other.rightWall = false;
-        } else if (diffCol == -1) { // Se tá na direita
+        } else if (diffCol == -1) { // other tá na direita
             this.rightWall = false;
             other.leftWall = false;
-        } else if (diffRow == 1) { // Se tá em cima
+        } else if (diffRow == 1) { // other tá em cima
             this.topWall = false;
             other.bottomWall = false;
-        } else if (diffRow == -1) { // Se tá embaixo
+        } else if (diffRow == -1) { // other tá embaixo
             this.bottomWall = false;
             other.topWall = false;
+        }
+    }
+
+    // Alterna o estado de uma parede e da vizinha correspondente
+    public void toggleWallWithNeighbor(String direcao, CelulaLabirinto vizinho) {
+        switch (direcao) {
+            case "RIGHT":
+                this.rightWall = !this.rightWall;
+                this.rightWallAlert = false;
+                if (vizinho != null) {
+                    vizinho.leftWall = this.rightWall;
+                    vizinho.leftWallAlert = false;
+                }
+                break;
+            case "BOTTOM":
+                this.bottomWall = !this.bottomWall;
+                this.bottomWallAlert = false;
+                if (vizinho != null) {
+                    vizinho.topWall = this.bottomWall;
+                    vizinho.topWallAlert = false;
+                }
+                break;
         }
     }
 }

@@ -88,16 +88,81 @@ public class GeradorLabirintoTest {
         assertTrue("A saída deve ser alcançável a partir do início", reachable[maze.getEndCol()][maze.getEndRow()]);
     }
 
-    // Conforme avança de fase, o labirinto deve aumentar de tamanho
+    // Conforme avança de fase, o labirinto deve aumentar de tamanho até a fase 5, e depois estabilizar em 9x16
     @Test
-    public void testLevelScaling() {
+    public void testLevelScalingUpToStage5() {
         Labirinto level1 = gerador.generateForLevel(1);
         Labirinto level2 = gerador.generateForLevel(2);
         Labirinto level3 = gerador.generateForLevel(3);
+        Labirinto level4 = gerador.generateForLevel(4);
+        Labirinto level5 = gerador.generateForLevel(5);
+        Labirinto level10 = gerador.generateForLevel(10);
+        Labirinto level15 = gerador.generateForLevel(15);
 
-        assertTrue(level2.getCols() >= level1.getCols());
-        assertTrue(level2.getRows() > level1.getRows());
-        assertTrue(level3.getCols() >= level2.getCols());
-        assertTrue(level3.getRows() > level2.getRows());
+        assertEquals(5, level1.getCols());
+        assertEquals(8, level1.getRows());
+
+        assertEquals(6, level2.getCols());
+        assertEquals(10, level2.getRows());
+
+        assertEquals(7, level3.getCols());
+        assertEquals(12, level3.getRows());
+
+        assertEquals(8, level4.getCols());
+        assertEquals(14, level4.getRows());
+
+        assertEquals(9, level5.getCols());
+        assertEquals(16, level5.getRows());
+
+        assertEquals(9, level10.getCols());
+        assertEquals(16, level10.getRows());
+
+        assertEquals(9, level15.getCols());
+        assertEquals(16, level15.getRows());
+    }
+
+    // A partir da fase 5, o início é aleatório e o goal é posicionado bem afastado
+    @Test
+    public void testRandomStartAndDistantGoalStage5AndAbove() {
+        for (int stage = 5; stage <= 15; stage++) {
+            Labirinto maze = gerador.generateForLevel(stage);
+            int sCol = maze.getStartCol();
+            int sRow = maze.getStartRow();
+            int eCol = maze.getEndCol();
+            int eRow = maze.getEndRow();
+
+            // Ponto de início e fim não podem ser a mesma célula
+            assertTrue("Início e fim não podem ser a mesma célula na fase " + stage,
+                    sCol != eCol || sRow != eRow);
+
+            // A saída precisa ser alcançável
+            assertTrue("O labirinto precisa ter caminho até a saída na fase " + stage,
+                    maze.isSolvable(sCol, sRow, eCol, eRow));
+
+            // Distância Manhattan mínima garantida (>= 4 células de separação)
+            int manhattan = Math.abs(sCol - eCol) + Math.abs(sRow - eRow);
+            assertTrue("A saída deve estar distante do início (Manhattan >= 4) na fase " + stage,
+                    manhattan >= 4);
+        }
+    }
+
+    // Na fase 8+, paredes mudam dinamicamente, mas a solvabilidade NUNCA pode ser quebrada
+    @Test
+    public void testReconfigurationPreservesSolvability() {
+        Labirinto maze = gerador.generateForLevel(8);
+        int sCol = maze.getStartCol();
+        int sRow = maze.getStartRow();
+        int eCol = maze.getEndCol();
+        int eRow = maze.getEndRow();
+
+        assertTrue(maze.isSolvable(sCol, sRow, eCol, eRow));
+
+        // Roda 10 rodadas de reconfiguração dinâmica
+        for (int i = 0; i < 10; i++) {
+            maze.avisarProximaReconfiguracao();
+            maze.executarReconfiguracao(sCol, sRow);
+            assertTrue("O labirinto deve permanecer solucionável após reconfiguração (rodada " + i + ")",
+                    maze.isSolvable(sCol, sRow, eCol, eRow));
+        }
     }
 }

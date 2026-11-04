@@ -39,6 +39,23 @@ public class GerenciadorVibracao {
         }
     }
 
+    // Vibração mais forte e dramática quando cai no buraco negro
+    public void vibrateBlackHole() {
+        if (vibrator == null || !vibrator.hasVibrator()) return;
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            long[] timings = {0, 80, 50, 140};
+            int[] amplitudes = {0, 200, 0, 255};
+            try {
+                vibrator.vibrate(VibrationEffect.createWaveform(timings, amplitudes, -1));
+            } catch (Exception ignored) {
+                vibrator.vibrate(VibrationEffect.createOneShot(200, VibrationEffect.DEFAULT_AMPLITUDE));
+            }
+        } else {
+            vibrator.vibrate(new long[]{0, 80, 50, 140}, -1);
+        }
+    }
+
     // Padrão de vibração comemorativo quando chega no objetivo final
     public void vibrateWin() {
         if (vibrator == null || !vibrator.hasVibrator()) return;

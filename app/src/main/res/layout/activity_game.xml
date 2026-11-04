@@ -59,43 +59,17 @@
                 android:textSize="13sp" />
         </LinearLayout>
 
-        <!-- Calibrate Button -->
-        <androidx.appcompat.widget.AppCompatButton
-            android:id="@+id/btnHudCalibrate"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:background="@drawable/btn_hud"
-            android:minWidth="0dp"
-            android:paddingHorizontal="8dp"
-            android:text="@string/btn_calibrate"
-            android:textColor="@color/btn_hud_text"
-            android:textSize="11sp" />
-
-        <!-- Axes Button -->
-        <androidx.appcompat.widget.AppCompatButton
-            android:id="@+id/btnHudAxes"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:layout_marginStart="6dp"
-            android:background="@drawable/btn_hud"
-            android:minWidth="0dp"
-            android:paddingHorizontal="8dp"
-            android:text="@string/btn_axes"
-            android:textColor="@color/btn_hud_text"
-            android:textSize="11sp" />
-
         <!-- Restart Button -->
         <androidx.appcompat.widget.AppCompatButton
             android:id="@+id/btnHudRestart"
             android:layout_width="wrap_content"
             android:layout_height="36dp"
-            android:layout_marginStart="6dp"
             android:background="@drawable/btn_hud"
             android:minWidth="0dp"
-            android:paddingHorizontal="8dp"
+            android:paddingHorizontal="12dp"
             android:text="@string/btn_restart"
             android:textColor="@color/btn_hud_text"
-            android:textSize="11sp" />
+            android:textSize="12sp" />
 
     </LinearLayout>
 

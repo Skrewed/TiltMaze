@@ -1,32 +1,32 @@
 package com.labirinto.tiltmaze.engine;
 
+import com.labirinto.tiltmaze.elementos.BuracoNegro;
 import com.labirinto.tiltmaze.maze.CelulaLabirinto;
 import com.labirinto.tiltmaze.maze.Labirinto;
 
+import java.util.List;
+
 // Nosso motorzinho de física 2D feito em Java.
-// Calcula a velocidade da bolinha com a gravidade da inclinação, atrito no chão e bate nas paredes.
+// Calcula a velocidade da bolinha com a gravidade da inclinação, atrito no chão,
+// bate nas paredes, checa se caiu em buracos negros e se chegou na meta de vitória.
 public class MotorFisico {
 
-    // Interface pra avisar a tela quando a bolinha bater ou ganhar o jogo
+    // Interface pra avisar a tela quando a bolinha bater, cair no buraco ou ganhar
     public interface ListenerColisao {
         void onWallHit(float intensity);
         void onGoalReached();
+        default void onBlackHoleCaptured() {} // Novo: quando a bolinha cai no buraco negro
     }
 
-    // Constantes físicas ajustadas no olho até o jogo ficar gostoso de jogar
-    private static final float TILT_ACCELERATION = 2800f; // Força de aceleração quando inclina tudo
-    private static final float FRICTION = 2.8f;          // Atrito com o chão pra bolinha não acelerar infinito
+    private static final float TILT_ACCELERATION = 3800f; // Força turbinada: bolinha acelera rápido com qualquer inclinação!
+    private static final float FRICTION = 2.4f;          // Atrito ligeiramente menor pro rolamento ficar bem ágil e responsivo
     private static final float RESTITUTION = 0.35f;       // Coeficiente de quique (elasticidade)
 
-    // Ajustes pra não bugar o som quando a bolinha fica parada na parede
     private static final float RESTITUTION_THRESHOLD = 75f;  // Se tiver muito devagar, não quica (repouso)
-    private static final float MIN_IMPACT_VELOCITY = 120f;   // Só faz barulho de batida se for uma pancada de verdade
+    private static final float MIN_IMPACT_VELOCITY = 120f;   // Só faz barulho de batida se for choque real
 
-    // Flags se o usuário quiser inverter os eixos nas opções
     private boolean invertX = false;
     private boolean invertY = false;
-
-    // Guarda se a bolinha já tá encostada na parede pra não tocar som a cada frame
     private boolean isRestingOnWall = false;
 
     private ListenerColisao listener;
@@ -51,20 +51,23 @@ public class MotorFisico {
         return invertY;
     }
 
-    // Roda a cada frame: calcula nova velocidade, mexe a bolinha e checa colisões
     public void update(Bolinha ball, Labirinto maze, float tiltRoll, float tiltPitch, float dt,
+                       float originX, float originY, float cellWidth, float cellHeight, float wallThickness) {
+        update(ball, maze, null, tiltRoll, tiltPitch, dt, originX, originY, cellWidth, cellHeight, wallThickness);
+    }
+
+    // Roda a cada frame
+    public void update(Bolinha ball, Labirinto maze, List<BuracoNegro> buracos, float tiltRoll, float tiltPitch, float dt,
                        float originX, float originY, float cellWidth, float cellHeight, float wallThickness) {
         if (maze == null || ball == null || dt <= 0f) return;
 
-        // 1. Converte os ângulos de graus pra radianos pra usar no Math.sin
+        // 1. Converte os ângulos de graus pra radianos
         float rollRad = (float) Math.toRadians(tiltRoll);
         float pitchRad = (float) Math.toRadians(tiltPitch);
 
-        // No Android, o topo da tela é Y=0. Então inclinar pra frente precisa diminuir o Y (por isso o -)
         float ax = TILT_ACCELERATION * (float) Math.sin(rollRad);
         float ay = -TILT_ACCELERATION * (float) Math.sin(pitchRad);
 
-        // Aplica inversão se o usuário ativou nas configurações
         if (invertX) ax = -ax;
         if (invertY) ay = -ay;
 
@@ -72,13 +75,11 @@ public class MotorFisico {
         ball.vx += ax * dt;
         ball.vy += ay * dt;
 
-        // Aplica o atrito pra diminuir a velocidade devagarzinho
         float damping = Math.max(0f, 1f - FRICTION * dt);
         ball.vx *= damping;
         ball.vy *= damping;
 
-        // Trava de segurança pra velocidade não explodir e atravessar a parede
-        float maxSpeed = Math.max(cellWidth, cellHeight) * 12f;
+        float maxSpeed = Math.max(cellWidth, cellHeight) * 16f; // Velocidade máxima mais alta pros reflexos do jogador
         float currentSpeed = (float) Math.hypot(ball.vx, ball.vy);
         if (currentSpeed > maxSpeed) {
             float scale = maxSpeed / currentSpeed;
@@ -86,18 +87,16 @@ public class MotorFisico {
             ball.vy *= scale;
         }
 
-        // 3. Sub-passos: divide o tempo do frame em 3 pedacinhos pra detectar colisão certinho
+        // 3. Sub-passos de integração
         int subSteps = 3;
         float subDt = dt / subSteps;
         float maxHitIntensity = 0f;
         boolean inContactAny = false;
 
         for (int step = 0; step < subSteps; step++) {
-            // Mexe a posição: S = S0 + v*t
             ball.x += ball.vx * subDt;
             ball.y += ball.vy * subDt;
 
-            // Resolve colisão contra as paredes
             float hitIntensity = resolveCollisions(ball, maze, originX, originY, cellWidth, cellHeight, wallThickness);
             if (hitIntensity > 0f) {
                 if (hitIntensity > maxHitIntensity) {
@@ -109,23 +108,38 @@ public class MotorFisico {
             }
         }
 
-        // Se deu uma batida forte e não tava encostada antes, toca o som e dá a vibrada
         if (maxHitIntensity >= MIN_IMPACT_VELOCITY) {
             if (!isRestingOnWall && listener != null) {
                 listener.onWallHit(maxHitIntensity);
             }
-            isRestingOnWall = true; // Agora tá encostada, não toca de novo até desgrudar
+            isRestingOnWall = true;
         } else if (!inContactAny) {
-            // A bolinha se soltou de qualquer parede, então desarma a trava
             isRestingOnWall = false;
         }
 
-        // 4. Checa se o centro da bolinha chegou perto do centro da saída
+        // 4. Checa colisão com buracos negros ativos (Fases 10+)
+        if (buracos != null && !buracos.isEmpty()) {
+            for (BuracoNegro buraco : buracos) {
+                if (buraco.checarCaptura(ball.x, ball.y, ball.radius)) {
+                    // Caiu no buraco negro! Para a bolinha e joga pro início da fase
+                    ball.stop();
+                    float startX = originX + (maze.getStartCol() + 0.5f) * cellWidth;
+                    float startY = originY + (maze.getStartRow() + 0.5f) * cellHeight;
+                    ball.reset(startX, startY, ball.radius);
+
+                    if (listener != null) {
+                        listener.onBlackHoleCaptured();
+                    }
+                    return; // Retorna imediatamente pra não colidir com a saída no mesmo frame
+                }
+            }
+        }
+
+        // 5. Checa se o centro da bolinha alcançou a meta de saída verde
         float goalCenterX = originX + (maze.getEndCol() + 0.5f) * cellWidth;
         float goalCenterY = originY + (maze.getEndRow() + 0.5f) * cellHeight;
         float distToGoal = (float) Math.hypot(ball.x - goalCenterX, ball.y - goalCenterY);
 
-        // Se entrou no buraco verde da saída, ganhou a fase!
         if (distToGoal <= Math.min(cellWidth, cellHeight) * 0.38f) {
             if (listener != null) {
                 listener.onGoalReached();
@@ -133,11 +147,10 @@ public class MotorFisico {
         }
     }
 
-    // Método auxiliar pra saber se a bolinha tá raspando em alguma parede
     private boolean checkIsTouchingAnyWall(Bolinha ball, Labirinto maze, float originX, float originY,
                                           float cellWidth, float cellHeight, float wallThickness) {
         float halfWall = wallThickness / 2f;
-        float touchThreshold = 1.0f; // Margem de tolerância em pixels
+        float touchThreshold = 1.0f;
 
         float boardLeft = originX + halfWall;
         float boardTop = originY + halfWall;
@@ -175,7 +188,6 @@ public class MotorFisico {
         return false;
     }
 
-    // Calcula a distância ao quadrado de um ponto até um segmento de reta (parede)
     private float distPointToSegmentSq(float px, float py, float x1, float y1, float x2, float y2) {
         float dx = x2 - x1;
         float dy = y2 - y1;
@@ -187,7 +199,6 @@ public class MotorFisico {
         return (px - cx) * (px - cx) + (py - cy) * (py - cy);
     }
 
-    // Checa as bordas de fora do tabuleiro e as paredes de cada célula perto da bolinha
     private float resolveCollisions(Bolinha ball, Labirinto maze, float originX, float originY,
                                     float cellWidth, float cellHeight, float wallThickness) {
         float halfWall = wallThickness / 2f;
@@ -200,7 +211,6 @@ public class MotorFisico {
 
         float maxImpact = 0f;
 
-        // Borda esquerda do tabuleiro
         if (ball.x - ball.radius < boardLeft) {
             ball.x = boardLeft + ball.radius;
             if (ball.vx < 0) {
@@ -209,11 +219,10 @@ public class MotorFisico {
                     maxImpact = Math.max(maxImpact, hitVel);
                     ball.vx = -ball.vx * RESTITUTION;
                 } else {
-                    ball.vx = 0f; // Não quica mais, só descansa encostada
+                    ball.vx = 0f;
                 }
             }
         }
-        // Borda direita
         if (ball.x + ball.radius > boardRight) {
             ball.x = boardRight - ball.radius;
             if (ball.vx > 0) {
@@ -226,7 +235,6 @@ public class MotorFisico {
                 }
             }
         }
-        // Borda de cima
         if (ball.y - ball.radius < boardTop) {
             ball.y = boardTop + ball.radius;
             if (ball.vy < 0) {
@@ -239,7 +247,6 @@ public class MotorFisico {
                 }
             }
         }
-        // Borda de baixo
         if (ball.y + ball.radius > boardBottom) {
             ball.y = boardBottom - ball.radius;
             if (ball.vy > 0) {
@@ -253,7 +260,6 @@ public class MotorFisico {
             }
         }
 
-        // Em vez de olhar todas as paredes do labirinto inteiro, olha só as células perto da bolinha pra economizar processamento
         int minCol = Math.max(0, (int) Math.floor((ball.x - effectiveRadius - originX) / cellWidth));
         int maxCol = Math.min(maze.getCols() - 1, (int) Math.floor((ball.x + effectiveRadius - originX) / cellWidth));
         int minRow = Math.max(0, (int) Math.floor((ball.y - effectiveRadius - originY) / cellHeight));
@@ -291,7 +297,6 @@ public class MotorFisico {
         return maxImpact;
     }
 
-    // Geometria analítica: acha o ponto mais perto no segmento e empurra a bolinha pra fora
     private float checkSegmentCollision(Bolinha ball, float x1, float y1, float x2, float y2, float effectiveRadius) {
         float dx = x2 - x1;
         float dy = y2 - y1;
@@ -312,21 +317,17 @@ public class MotorFisico {
             float nx = (dist > 0.0001f) ? (ball.x - closestX) / dist : 0f;
             float ny = (dist > 0.0001f) ? (ball.y - closestY) / dist : -1f;
 
-            // Corrige a penetração pra não atravessar
             ball.x += nx * overlap;
             ball.y += ny * overlap;
 
-            // Produto escalar pra ver a velocidade em direção à parede
             float velAlongNormal = ball.vx * nx + ball.vy * ny;
             if (velAlongNormal < 0f) {
                 float hitVel = Math.abs(velAlongNormal);
                 if (hitVel > RESTITUTION_THRESHOLD) {
-                    // Quica com o coeficiente de restituição
                     ball.vx -= (1f + RESTITUTION) * velAlongNormal * nx;
                     ball.vy -= (1f + RESTITUTION) * velAlongNormal * ny;
                     return hitVel;
                 } else {
-                    // Cancela a velocidade contra a parede, mas deixa deslizar de lado
                     ball.vx -= velAlongNormal * nx;
                     ball.vy -= velAlongNormal * ny;
                     return 0f;

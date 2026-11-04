@@ -4,10 +4,13 @@
     <string name="menu_subtitle">Tilt Maze • Controle por Inclinação</string>
     <string name="btn_start">INICIAR</string>
     <string name="btn_exit">SAIR</string>
-    <string name="hud_level">FASE %1$d</string>
+    <string name="hud_level">FASE %1$d / 15</string>
     <string name="hud_time">TEMPO: %1$s</string>
     <string name="dialog_win_title">FASE CONCLUÍDA!</string>
     <string name="dialog_win_message">Excelente! Você concluiu em %1$s</string>
+    <string name="game_completed_title">🏆 JOGO ZERADO!</string>
+    <string name="game_completed_message">Incrível! Você superou todas as 15 fases do labirinto!\nTempo da última fase: %1$s</string>
+    <string name="btn_play_again">JOGAR NOVAMENTE</string>
     <string name="btn_next_level">PRÓXIMA FASE</string>
     <string name="btn_menu">MENU</string>
     <string name="btn_restart">REINICIAR</string>

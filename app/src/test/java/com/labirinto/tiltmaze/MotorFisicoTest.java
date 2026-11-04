@@ -1,14 +1,18 @@
 package com.labirinto.tiltmaze;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import com.labirinto.tiltmaze.elementos.BuracoNegro;
 import com.labirinto.tiltmaze.engine.Bolinha;
 import com.labirinto.tiltmaze.engine.MotorFisico;
 import com.labirinto.tiltmaze.maze.Labirinto;
 
 import org.junit.Before;
 import org.junit.Test;
+
+import java.util.Collections;
 
 // Testes unitários do motor físico pra validar se a física não tá maluca
 public class MotorFisicoTest {
@@ -20,7 +24,7 @@ public class MotorFisicoTest {
     @Before
     public void setUp() {
         engine = new MotorFisico();
-        maze = new Labirinto(4, 4); // Matriz 4x4
+        maze = new Labirinto(4, 4); // Matriz 4x4 com start em (0,0) e end em (3,3)
         ball = new Bolinha(50f, 50f, 10f); // Põe a bolinha no centro da célula (0,0)
     }
 
@@ -125,6 +129,9 @@ public class MotorFisicoTest {
 
             @Override
             public void onGoalReached() {}
+
+            @Override
+            public void onBlackHoleCaptured() {}
         });
 
         // 1. Bola bate na parede com força
@@ -171,6 +178,9 @@ public class MotorFisicoTest {
             public void onGoalReached() {
                 goalReached[0] = true;
             }
+
+            @Override
+            public void onBlackHoleCaptured() {}
         });
 
         float cellWidth = 100f;
@@ -183,5 +193,103 @@ public class MotorFisicoTest {
         engine.update(ball, maze, 0f, 0f, 0.016f, 0, 0, cellWidth, cellHeight, 10);
 
         assertTrue("Objetivo deve ser acionado quando a esfera atinge a célula final", goalReached[0]);
+    }
+
+    // Novo: colisão com buraco negro ativo teleporta pro início e zera a velocidade
+    @Test
+    public void testBlackHoleCapturesBallAndResetsToStart() {
+        final boolean[] captured = {false};
+        engine.setCollisionListener(new MotorFisico.ListenerColisao() {
+            @Override
+            public void onWallHit(float intensity) {}
+
+            @Override
+            public void onGoalReached() {}
+
+            @Override
+            public void onBlackHoleCaptured() {
+                captured[0] = true;
+            }
+        });
+
+        float cellWidth = 100f;
+        float cellHeight = 100f;
+        // Buraco negro na célula (2, 2)
+        BuracoNegro buraco = new BuracoNegro(2, 2, 250f, 250f, 30f, 4.0f);
+        // Avança 1.0s para ficar no estado ATIVO
+        buraco.update(1.0f);
+        assertEquals(BuracoNegro.Estado.ATIVO, buraco.getEstado());
+
+        // Bolinha se movendo em direção ao buraco
+        ball.reset(250f, 250f, 12f);
+        ball.vx = 150f;
+        ball.vy = -50f;
+
+        engine.update(ball, maze, Collections.singletonList(buraco), 0f, 0f, 0.016f,
+                0f, 0f, cellWidth, cellHeight, 10f);
+
+        assertTrue("O evento onBlackHoleCaptured deve ser disparado", captured[0]);
+        // Bolinha deve ter voltado para o centro da célula de spawn (0, 0)
+        float expectedStartX = (maze.getStartCol() + 0.5f) * cellWidth;
+        float expectedStartY = (maze.getStartRow() + 0.5f) * cellHeight;
+        assertEquals(expectedStartX, ball.x, 0.01f);
+        assertEquals(expectedStartY, ball.y, 0.01f);
+        assertEquals(0f, ball.vx, 0.001f);
+        assertEquals(0f, ball.vy, 0.001f);
+    }
+
+    // Buraco negro ainda surgindo (inativo) não deve capturar a bolinha
+    @Test
+    public void testInactiveBlackHoleDoesNotCapture() {
+        final boolean[] captured = {false};
+        engine.setCollisionListener(new MotorFisico.ListenerColisao() {
+            @Override
+            public void onWallHit(float intensity) {}
+
+            @Override
+            public void onGoalReached() {}
+
+            @Override
+            public void onBlackHoleCaptured() {
+                captured[0] = true;
+            }
+        });
+
+        BuracoNegro buraco = new BuracoNegro(2, 2, 250f, 250f, 30f, 4.0f);
+        // Não avança o suficiente: continua em SURGINDO
+        buraco.update(0.3f);
+        assertEquals(BuracoNegro.Estado.SURGINDO, buraco.getEstado());
+
+        ball.reset(250f, 250f, 12f);
+
+        engine.update(ball, maze, Collections.singletonList(buraco), 0f, 0f, 0.016f,
+                0f, 0f, 100f, 100f, 10f);
+
+        assertFalse("Buraco negro no estado SURGINDO não deve capturar", captured[0]);
+        assertEquals(250f, ball.x, 0.01f);
+    }
+
+    // Fórmula de redução do raio de luz da fase 5 até a fase 15
+    @Test
+    public void testShrinkingFogOfWarRadiusFormula() {
+        float cellWidth = 100f;
+        float previousRadius = Float.MAX_VALUE;
+
+        for (int fase = 5; fase <= 15; fase++) {
+            float mult = Math.max(1.3f, 3.4f - (fase - 5) * 0.21f);
+            float radius = cellWidth * mult;
+
+            assertTrue("O raio na fase " + fase + " deve ser menor ou igual à anterior",
+                    radius <= previousRadius);
+            assertTrue("O raio mínimo não deve ser inferior a 1.3 células",
+                    mult >= 1.3f);
+            previousRadius = radius;
+        }
+
+        // Na fase 5 é ~3.4 células, na fase 15 é ~1.3 células
+        float rFase5 = cellWidth * Math.max(1.3f, 3.4f - (5 - 5) * 0.21f);
+        float rFase15 = cellWidth * Math.max(1.3f, 3.4f - (15 - 5) * 0.21f);
+        assertEquals(340f, rFase5, 0.01f);
+        assertEquals(130f, rFase15, 0.01f);
     }
 }

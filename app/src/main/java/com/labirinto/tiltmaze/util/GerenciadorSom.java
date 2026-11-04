@@ -125,6 +125,45 @@ public class GerenciadorSom {
         }).start();
     }
 
+    // Toca som descendente de quando a bolinha é sugada pelo buraco negro (Fases 10+)
+    public void playBlackHoleSound() {
+        new Thread(() -> {
+            try {
+                int durationMs = 280;
+                int numSamples = (int) (SAMPLE_RATE * (durationMs / 1000.0));
+                short[] buffer = new short[numSamples];
+
+                for (int i = 0; i < numSamples; i++) {
+                    double t = (double) i / SAMPLE_RATE;
+                    // Frequência vai caindo de 320Hz até 80Hz (efeito de queda/sucção)
+                    double freq = 320.0 - (240.0 * ((double) i / numSamples));
+                    double envelope = 1.0 - Math.pow((double) i / numSamples, 2.0);
+                    double sample = Math.sin(2.0 * Math.PI * freq * t) * envelope;
+                    buffer[i] = (short) (sample * 16000);
+                }
+
+                AudioTrack holeTrack = new AudioTrack.Builder()
+                        .setAudioAttributes(new AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_GAME)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                                .build())
+                        .setAudioFormat(new AudioFormat.Builder()
+                                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                                .setSampleRate(SAMPLE_RATE)
+                                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                                .build())
+                        .setBufferSizeInBytes(buffer.length * 2)
+                        .setTransferMode(AudioTrack.MODE_STATIC)
+                        .build();
+
+                holeTrack.write(buffer, 0, buffer.length);
+                holeTrack.play();
+                Thread.sleep(durationMs + 40);
+                holeTrack.release();
+            } catch (Exception ignored) {}
+        }).start();
+    }
+
     // Libera a memória do áudio quando fechar a tela
     public void release() {
         synchronized (hitLock) {
