@@ -5,6 +5,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.RadialGradient;
@@ -13,12 +14,14 @@ import android.graphics.Shader;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.AttributeSet;
+import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
 import androidx.annotation.NonNull;
 
 import com.labirinto.tiltmaze.elementos.BuracoNegro;
+import com.labirinto.tiltmaze.elementos.ParticulaChao;
 import com.labirinto.tiltmaze.elementos.Vagalume;
 import com.labirinto.tiltmaze.engine.Bolinha;
 import com.labirinto.tiltmaze.engine.ControladorSensores;
@@ -104,8 +107,30 @@ public class VisaoJogo extends SurfaceView implements SurfaceHolder.Callback, Mo
     private final Paint paintFireflyGlow = new Paint(Paint.ANTI_ALIAS_FLAG);    // Halo bioluminescente pulsante
     private final Paint paintFireflyWings = new Paint(Paint.ANTI_ALIAS_FLAG);   // Asinhas translúcidas
     private final Paint paintFireflyTrail = new Paint(Paint.ANTI_ALIAS_FLAG);   // Partículas douradas do rastro
+
+    // Vórtice 100% cinza monocromático (Fases 10+)
     private final Paint paintBlackHoleCore = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint paintBlackHoleSwirl = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint paintVortexCenter = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint paintVortexSingularity = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint paintVortexSpiral1 = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint paintVortexSpiral2 = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint paintVortexSpiral3 = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF rectVortex = new RectF();
+
+    // Raio de energia da bolinha azul até o vagalume ao clicar
+    private boolean raioAtivo = false;
+    private float raioTimer = 0f;
+    private float raioStartX, raioStartY;
+    private float raioEndX, raioEndY;
+    private final Path pathRaio = new Path();
+    private final Paint paintRaioGlow = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint paintRaioCore = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+    // Partículas de poeira luminosa caídas no chão (Zero GC via pool!)
+    private static final int MAX_PARTICULAS_CHAO = 64;
+    private final ParticulaChao[] particulasChao = new ParticulaChao[MAX_PARTICULAS_CHAO];
+    private final Paint paintParticulaChao = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint paintParticulaChaoGlow = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     // Lock de sincronização pra física não colidir com troca de fase na UI thread
     private final Object lockFisica = new Object();
@@ -150,8 +175,8 @@ public class VisaoJogo extends SurfaceView implements SurfaceHolder.Callback, Mo
         paintWall.setStyle(Paint.Style.STROKE);
         paintWall.setStrokeCap(Paint.Cap.ROUND);
 
-        // Parede que tá prestes a se mover (pisca em âmbar/laranja)
-        paintWallAlert.setColor(Color.parseColor("#FF9100"));
+        // Parede que tá prestes a se mover (pisca com cor neutra elegante: platina/slate)
+        paintWallAlert.setColor(Color.parseColor("#CFD8DC"));
         paintWallAlert.setStyle(Paint.Style.STROKE);
         paintWallAlert.setStrokeCap(Paint.Cap.ROUND);
 
@@ -223,13 +248,54 @@ public class VisaoJogo extends SurfaceView implements SurfaceHolder.Callback, Mo
         paintFireflyTrail.setColor(Color.parseColor("#FFEE55"));
         paintFireflyTrail.setStyle(Paint.Style.FILL);
 
-        // Buraco Negro
-        paintBlackHoleCore.setColor(Color.parseColor("#000000"));
+        // Vórtice 100% cinza monocromático (Fases 10+)
+        paintBlackHoleCore.setColor(Color.parseColor("#121316"));
         paintBlackHoleCore.setStyle(Paint.Style.FILL);
 
-        paintBlackHoleSwirl.setColor(Color.parseColor("#D500F9"));
-        paintBlackHoleSwirl.setStyle(Paint.Style.STROKE);
-        paintBlackHoleSwirl.setStrokeWidth(4f);
+        paintVortexCenter.setColor(Color.parseColor("#1F2228"));
+        paintVortexCenter.setStyle(Paint.Style.FILL);
+
+        paintVortexSingularity.setColor(Color.parseColor("#08090A"));
+        paintVortexSingularity.setStyle(Paint.Style.FILL);
+
+        paintVortexSpiral1.setColor(Color.parseColor("#788290"));
+        paintVortexSpiral1.setStyle(Paint.Style.STROKE);
+        paintVortexSpiral1.setStrokeWidth(3.5f);
+        paintVortexSpiral1.setStrokeCap(Paint.Cap.ROUND);
+
+        paintVortexSpiral2.setColor(Color.parseColor("#A4B0BE"));
+        paintVortexSpiral2.setStyle(Paint.Style.STROKE);
+        paintVortexSpiral2.setStrokeWidth(2.8f);
+        paintVortexSpiral2.setStrokeCap(Paint.Cap.ROUND);
+
+        paintVortexSpiral3.setColor(Color.parseColor("#D1D8E0"));
+        paintVortexSpiral3.setStyle(Paint.Style.STROKE);
+        paintVortexSpiral3.setStrokeWidth(2.0f);
+        paintVortexSpiral3.setStrokeCap(Paint.Cap.ROUND);
+
+        // Raio de choque elétrico
+        paintRaioGlow.setColor(Color.parseColor("#9900E5FF"));
+        paintRaioGlow.setStyle(Paint.Style.STROKE);
+        paintRaioGlow.setStrokeWidth(9f);
+        paintRaioGlow.setStrokeCap(Paint.Cap.ROUND);
+        paintRaioGlow.setStrokeJoin(Paint.Join.ROUND);
+
+        paintRaioCore.setColor(Color.parseColor("#FFFFFF"));
+        paintRaioCore.setStyle(Paint.Style.STROKE);
+        paintRaioCore.setStrokeWidth(3f);
+        paintRaioCore.setStrokeCap(Paint.Cap.ROUND);
+        paintRaioCore.setStrokeJoin(Paint.Join.ROUND);
+
+        // Pool de partículas no chão
+        for (int i = 0; i < MAX_PARTICULAS_CHAO; i++) {
+            particulasChao[i] = new ParticulaChao();
+        }
+
+        paintParticulaChao.setColor(Color.parseColor("#FFEE55"));
+        paintParticulaChao.setStyle(Paint.Style.FILL);
+
+        paintParticulaChaoGlow.setColor(Color.parseColor("#55EEFF41"));
+        paintParticulaChaoGlow.setStyle(Paint.Style.FILL);
     }
 
     public void setSensorHandler(ControladorSensores controladorSensores) {
@@ -271,6 +337,11 @@ public class VisaoJogo extends SurfaceView implements SurfaceHolder.Callback, Mo
             timerReconfiguracaoParede = 0f;
             timerAlertaParede = 0f;
             aguardandoReconfiguracao = false;
+            raioAtivo = false;
+            raioTimer = 0f;
+            for (int i = 0; i < MAX_PARTICULAS_CHAO; i++) {
+                if (particulasChao[i] != null) particulasChao[i].ativa = false;
+            }
 
             recalculateLayout(getWidth(), getHeight());
             resetBallToStart();
@@ -290,6 +361,11 @@ public class VisaoJogo extends SurfaceView implements SurfaceHolder.Callback, Mo
             timerSpawnBuraco = 0f;
             timerReconfiguracaoParede = 0f;
             aguardandoReconfiguracao = false;
+            raioAtivo = false;
+            raioTimer = 0f;
+            for (int i = 0; i < MAX_PARTICULAS_CHAO; i++) {
+                if (particulasChao[i] != null) particulasChao[i].ativa = false;
+            }
             if (labirintoAtual != null) {
                 labirintoAtual.limparAlertas();
             }
@@ -361,6 +437,22 @@ public class VisaoJogo extends SurfaceView implements SurfaceHolder.Callback, Mo
             motorFisico.update(bolinha, labirintoAtual, buracosNegros, roll, pitch, dt,
                     originX, originY, cellWidth, cellHeight, wallThickness);
 
+            // Timer do raio elétrico disparado pela bolinha
+            if (raioAtivo) {
+                raioTimer -= dt;
+                if (raioTimer <= 0f) {
+                    raioAtivo = false;
+                }
+            }
+
+            // Atualiza partículas que caíram no chão iluminando o mapa com contenção suave
+            for (int i = 0; i < MAX_PARTICULAS_CHAO; i++) {
+                if (particulasChao[i].ativa) {
+                    particulasChao[i].update(dt, boundsLabirinto.left + 8f, boundsLabirinto.top + 8f,
+                            boundsLabirinto.right - 8f, boundsLabirinto.bottom - 8f);
+                }
+            }
+
             // 2. Vagalumes (Fases 5 a 15)
             if (faseAtual >= 5) {
                 timerSpawnVagalume += dt;
@@ -386,14 +478,21 @@ public class VisaoJogo extends SurfaceView implements SurfaceHolder.Callback, Mo
 
             // 3. Paredes Dinâmicas com Auto-reconfiguração (Fases 8 a 15)
             if (faseAtual >= 8) {
+                // Frequência e velocidade de alternância aumentam conforme os níveis avançam:
+                // Intervalo entre trocas cai de 6.0s (fase 8) para até 2.4s (fase 15)
+                float intervaloReconfig = Math.max(2.4f, 6.0f - (faseAtual - 8) * 0.50f);
+                // Duração do aviso piscando fica mais rápida e desafiadora (1.4s até 0.65s)
+                float duracaoAlerta = Math.max(0.65f, 1.4f - (faseAtual - 8) * 0.11f);
+                // Muda mais paredes por vez conforme o nível avança (de 3 até 6 paredes)
+                int qtdParedes = Math.min(6, 3 + (faseAtual - 8) / 2);
+
                 if (!aguardandoReconfiguracao) {
                     timerReconfiguracaoParede += dt;
-                    // A cada 7 segundos, inicia o alerta de reconfiguração
-                    if (timerReconfiguracaoParede >= 7.0f) {
+                    if (timerReconfiguracaoParede >= intervaloReconfig) {
                         timerReconfiguracaoParede = 0f;
                         aguardandoReconfiguracao = true;
-                        timerAlertaParede = 1.5f; // Fica piscando em alerta por 1.5s
-                        labirintoAtual.avisarProximaReconfiguracao();
+                        timerAlertaParede = duracaoAlerta;
+                        labirintoAtual.avisarProximaReconfiguracao(qtdParedes);
                     }
                 } else {
                     timerAlertaParede -= dt;
@@ -484,15 +583,52 @@ public class VisaoJogo extends SurfaceView implements SurfaceHolder.Callback, Mo
         float startY = originY + (labirintoAtual.getStartRow() + 0.5f) * cellHeight;
         canvas.drawCircle(startX, startY, bolinha.radius * 1.4f, paintStartRing);
 
-        // 4. Buracos Negros (Fases 10+)
+        // 4. Buracos Negros / Vórtices Cinzas (Fases 10+) - 100% monocromático cinza
         for (BuracoNegro b : buracosNegros) {
             float r = b.getRaioAtual();
             if (r > 0f) {
-                // Anel externo roxo/magenta pulsante
-                paintBlackHoleSwirl.setAlpha(180);
-                canvas.drawCircle(b.centerX, b.centerY, r * 1.15f, paintBlackHoleSwirl);
-                // Núcleo negro profundo
-                canvas.drawCircle(b.centerX, b.centerY, r, paintBlackHoleCore);
+                float rot = (b.getTempoAtual() * 180f) % 360f;
+
+                // Fundo do vórtice (cinza escuro profundo)
+                canvas.drawCircle(b.centerX, b.centerY, r * 1.18f, paintVortexCenter);
+                canvas.drawCircle(b.centerX, b.centerY, r * 0.95f, paintBlackHoleCore);
+
+                // Espirais e anéis concêntricos girando (100% tons neutros de cinza)
+                // Braço externo (cinza médio)
+                rectVortex.set(b.centerX - r * 1.05f, b.centerY - r * 1.05f,
+                        b.centerX + r * 1.05f, b.centerY + r * 1.05f);
+                canvas.drawArc(rectVortex, rot, 80f, false, paintVortexSpiral1);
+                canvas.drawArc(rectVortex, rot + 180f, 80f, false, paintVortexSpiral1);
+
+                // Braço intermediário (cinza claro prateado)
+                rectVortex.set(b.centerX - r * 0.72f, b.centerY - r * 0.72f,
+                        b.centerX + r * 0.72f, b.centerY + r * 0.72f);
+                canvas.drawArc(rectVortex, -rot * 1.3f, 100f, false, paintVortexSpiral2);
+                canvas.drawArc(rectVortex, -rot * 1.3f + 180f, 100f, false, paintVortexSpiral2);
+
+                // Braço interno veloz (cinza platina brilhante)
+                rectVortex.set(b.centerX - r * 0.42f, b.centerY - r * 0.42f,
+                        b.centerX + r * 0.42f, b.centerY + r * 0.42f);
+                canvas.drawArc(rectVortex, rot * 2.0f + 90f, 120f, false, paintVortexSpiral3);
+                canvas.drawArc(rectVortex, rot * 2.0f + 270f, 120f, false, paintVortexSpiral3);
+
+                // Singularidade central
+                canvas.drawCircle(b.centerX, b.centerY, r * 0.22f, paintVortexSingularity);
+            }
+        }
+
+        // Partículas luminosas caídas no chão deixadas por vagalumes abatidos
+        for (int i = 0; i < MAX_PARTICULAS_CHAO; i++) {
+            ParticulaChao p = particulasChao[i];
+            if (p.ativa) {
+                float intens = p.getIntensidade();
+                if (intens > 0f) {
+                    paintParticulaChaoGlow.setAlpha((int) (90 * intens));
+                    canvas.drawCircle(p.x, p.y, p.raio * 2.2f, paintParticulaChaoGlow);
+
+                    paintParticulaChao.setAlpha((int) (255 * intens));
+                    canvas.drawCircle(p.x, p.y, p.raio, paintParticulaChao);
+                }
             }
         }
 
@@ -508,8 +644,9 @@ public class VisaoJogo extends SurfaceView implements SurfaceHolder.Callback, Mo
         int cols = labirintoAtual.getCols();
         int rows = labirintoAtual.getRows();
 
-        // Piscar âmbar das paredes em alerta (Fases 8+)
-        boolean alertaPiscar = ((int) (pulseTime * 10f) % 2 == 0);
+        // Piscar neutro das paredes em alerta (Fases 8+) - mais rápido nos níveis mais altos
+        float freqPiscar = 10f + (faseAtual - 8) * 2.5f;
+        boolean alertaPiscar = ((int) (pulseTime * freqPiscar) % 2 == 0);
 
         for (int c = 0; c < cols; c++) {
             for (int r = 0; r < rows; r++) {
@@ -614,6 +751,34 @@ public class VisaoJogo extends SurfaceView implements SurfaceHolder.Callback, Mo
             shaderLuzElemento.setLocalMatrix(matrixLuzElemento);
             canvas.drawCircle(endX, endY, raioSaida, paintLuzSuaveElemento);
 
+            // Furos de luz suaves das partículas no chão (vão enfraquecendo aos poucos até voltar ao escuro)
+            for (int i = 0; i < MAX_PARTICULAS_CHAO; i++) {
+                ParticulaChao p = particulasChao[i];
+                if (p.ativa) {
+                    float intens = p.getIntensidade();
+                    if (intens > 0.04f) {
+                        float rLuzP = p.raioLuz * (0.35f + 0.65f * intens);
+                        matrixLuzElemento.reset();
+                        matrixLuzElemento.setScale(rLuzP, rLuzP);
+                        matrixLuzElemento.postTranslate(p.x, p.y);
+                        shaderLuzElemento.setLocalMatrix(matrixLuzElemento);
+                        canvas.drawCircle(p.x, p.y, rLuzP, paintLuzSuaveElemento);
+                    }
+                }
+            }
+
+            // Flash de luz do raio elétrico rasgando o nevoeiro
+            if (raioAtivo) {
+                float midX = (raioStartX + raioEndX) * 0.5f;
+                float midY = (raioStartY + raioEndY) * 0.5f;
+                float rRaio = cellWidth * 1.8f;
+                matrixLuzElemento.reset();
+                matrixLuzElemento.setScale(rRaio, rRaio);
+                matrixLuzElemento.postTranslate(midX, midY);
+                shaderLuzElemento.setLocalMatrix(matrixLuzElemento);
+                canvas.drawCircle(midX, midY, rRaio, paintLuzSuaveElemento);
+            }
+
             canvas.restoreToCount(saveCount);
         }
 
@@ -665,8 +830,141 @@ public class VisaoJogo extends SurfaceView implements SurfaceHolder.Callback, Mo
             // Asa direita
             canvas.drawCircle(v.x - perpX * asaDist, v.y - perpY * asaDist - asaOffset, 2.3f, paintFireflyWings);
         }
+
+        // 11. Raio de energia da bolinha azul até o vagalume
+        if (raioAtivo) {
+            canvas.drawPath(pathRaio, paintRaioGlow);
+            canvas.drawPath(pathRaio, paintRaioCore);
+        }
     }
 }
+
+    // Dispara o raio elétrico da bolinha azul até a posição do vagalume clicado
+    private void dispararRaioPara(float targetX, float targetY) {
+        raioStartX = bolinha.x;
+        raioStartY = bolinha.y;
+        raioEndX = targetX;
+        raioEndY = targetY;
+        raioAtivo = true;
+        raioTimer = 0.18f;
+
+        pathRaio.reset();
+        pathRaio.moveTo(raioStartX, raioStartY);
+
+        float dx = raioEndX - raioStartX;
+        float dy = raioEndY - raioStartY;
+        float dist = (float) Math.hypot(dx, dy);
+
+        float perpX = -dy / (dist > 0.001f ? dist : 1f);
+        float perpY = dx / (dist > 0.001f ? dist : 1f);
+
+        int segmentos = Math.max(4, Math.min(8, (int) (dist / 35f)));
+        for (int i = 1; i < segmentos; i++) {
+            float t = (float) i / segmentos;
+            float segX = raioStartX + dx * t;
+            float segY = raioStartY + dy * t;
+            float jitter = (random.nextFloat() - 0.5f) * 26f * (1f - Math.abs(t - 0.5f) * 0.7f);
+            pathRaio.lineTo(segX + perpX * jitter, segY + perpY * jitter);
+        }
+        pathRaio.lineTo(raioEndX, raioEndY);
+    }
+
+    // Solta partículas que caem no chão e se espalham amplamente pelo labirinto (sem empelotar em blob)
+    private void spawnParticulasChao(float x, float y) {
+        int qtd = 18 + random.nextInt(6); // 18 a 23 partículas dispersas
+        int adicionadas = 0;
+
+        for (int i = 0; i < MAX_PARTICULAS_CHAO && adicionadas < qtd; i++) {
+            ParticulaChao p = particulasChao[i];
+            if (!p.ativa) {
+                // Leve dispersão no ponto de origem pra não partirem todas do mesmo pixel exato
+                float burstAng = (float) (random.nextFloat() * 2 * Math.PI);
+                float burstDist = 3f + random.nextFloat() * 12f;
+                p.x = x + (float) Math.cos(burstAng) * burstDist;
+                p.y = y + (float) Math.sin(burstAng) * burstDist;
+
+                // 3 faixas de velocidade pra criar uma dispersão rica: algumas ficam perto, outras voam longe
+                float angulo = (float) (random.nextFloat() * 2 * Math.PI);
+                float faixa = random.nextFloat();
+                float vel;
+                if (faixa < 0.30f) {
+                    // Núcleo interno: embers suaves que assentam mais perto
+                    vel = cellWidth * (0.9f + random.nextFloat() * 0.7f);
+                    p.raio = 2.4f + random.nextFloat() * 1.4f;
+                    p.raioLuz = cellWidth * (0.40f + random.nextFloat() * 0.25f);
+                } else if (faixa < 0.75f) {
+                    // Corpo médio: espalham-se pela largura do corredor
+                    vel = cellWidth * (1.8f + random.nextFloat() * 1.0f);
+                    p.raio = 1.8f + random.nextFloat() * 1.2f;
+                    p.raioLuz = cellWidth * (0.55f + random.nextFloat() * 0.30f);
+                } else {
+                    // Estilhaços rápidos: disparam em direção às curvas e paredes
+                    vel = cellWidth * (2.9f + random.nextFloat() * 1.3f);
+                    p.raio = 1.4f + random.nextFloat() * 1.0f;
+                    p.raioLuz = cellWidth * (0.75f + random.nextFloat() * 0.35f);
+                }
+
+                p.vx = (float) Math.cos(angulo) * vel;
+                p.vy = (float) Math.sin(angulo) * vel;
+                p.vida = 0f;
+                // Duração individual variável pra não apagarem todas de uma vez de forma brusca
+                p.duracao = 5.5f + random.nextFloat() * 3.5f; // Ficam no chão entre 5.5s e 9.0s
+                p.ativa = true;
+                adicionadas++;
+            }
+        }
+    }
+
+    // Detecta toque do usuário nos vagalumes pra disparar o raio da bolinha azul
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+            float touchX = event.getX();
+            float touchY = event.getY();
+
+            synchronized (lockFisica) {
+                if (faseVencida || labirintoAtual == null || faseAtual < 5) {
+                    return super.onTouchEvent(event);
+                }
+
+                Vagalume vagalumeAlvo = null;
+                float menorDistSq = Float.MAX_VALUE;
+                float touchRadius = Math.max(55f, cellWidth * 0.85f);
+                float maxDistSq = touchRadius * touchRadius;
+
+                for (Vagalume v : vagalumes) {
+                    if (!v.isMorto() && v.getOpacidade() > 0.15f) {
+                        float dx = v.x - touchX;
+                        float dy = v.y - touchY;
+                        float distSq = dx * dx + dy * dy;
+                        if (distSq <= maxDistSq && distSq < menorDistSq) {
+                            menorDistSq = distSq;
+                            vagalumeAlvo = v;
+                        }
+                    }
+                }
+
+                if (vagalumeAlvo != null) {
+                    // 1. Dispara o raio da bolinha azul até o vagalume
+                    dispararRaioPara(vagalumeAlvo.x, vagalumeAlvo.y);
+
+                    // 2. Vagalume morre na hora
+                    float deadX = vagalumeAlvo.x;
+                    float deadY = vagalumeAlvo.y;
+                    vagalumeAlvo.matar();
+
+                    // 3. Partículas caem no chão e iluminam a área
+                    spawnParticulasChao(deadX, deadY);
+
+                    // 4. Efeitos sonoro e tátil
+                    gerenciadorSom.playElectricZapSound();
+                    gerenciadorVibracao.vibrateZap();
+                    return true;
+                }
+            }
+        }
+        return super.onTouchEvent(event);
+    }
 
     @Override
     public void onWallHit(float intensity) {

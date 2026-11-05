@@ -19,8 +19,8 @@
   - Fallback automático para `Sensor.TYPE_GRAVITY` e `Sensor.TYPE_ACCELEROMETER`.
 
 - **⚡ Motor Físico Turbinado em Java:**
-  - Simulação ágil e de alta resposta (`TILT_ACCELERATION = 3800f`, `FRICTION = 2.4f`), tornando a bolinha veloz e altamente responsiva a qualquer leve inclinação do aparelho.
-  - Integração contínua de sub-passos com resolução de colisão inelástica em repouso.
+  - Simulação ágil e de altíssima resposta (`TILT_ACCELERATION = 5200f`, `FRICTION = 2.0f`, `maxSpeed = 22 * cellSize`), tornando a bolinha azul hiper veloz e instantaneamente responsiva à rolagem do aparelho.
+  - Integração contínua de sub-passos com resolução de colisão inelástica em repouso e margem de contato ampliada contra falsas micro-batidas.
   - Sincronização concorrente thread-safe (`lockFisica`) e guarda de tempo mínimo, eliminando falhas de vitória prematura na virada de fase.
   - Detecção precisa de vitória e colisões com vórtices e alvos.
 
@@ -33,17 +33,20 @@
     - A cada nova abertura ou rodada, **um novo mapa 100% procedural é gerado**. O ponto de partida (spawn) e o buraco verde (goal) são sorteados aleatoriamente, com garantia algorítmica de grande distância entre si (BFS).
     - **Fog of War com Efeito Esfumaçado (Blur)**: escuridão cobrindo o tabuleiro com abertura de luz de bordas suaves e esfumaçadas em gradiente radial (`PorterDuff.Mode.DST_OUT`), simulando uma tocha/lanterna atmosférica realista.
     - O raio da luz **diminui gradativamente a cada fase**, caindo de ~3.4 células na fase 5 até ~1.3 célula na fase 15.
-  - **Fase 5 a 15 (Vagalumes Bioluminescentes & Rastro de Partículas)**:
-    - Vagalumes super charmosos cruzam a tela com vôo fluido e orgânico baseado em curvas harmônicas senoidais.
-    - Cada vagalume possui corpo bioluminescente pulsante, núcleo incandescente e asinhas translúcidas que batem em alta frequência.
-    - Conforme voam, soltam um rastro contínuo de **partículas douradas cintilantes (fairy dust)** gerenciadas por uma pool de memória com Zero GC, que iluminam suavemente o caminho e as paredes do labirinto no escuro.
-  - **Fase 8 em diante (Labirinto Vivo - Paredes Móveis)**:
+  - **Fase 5 a 15 (Vagalumes Bioluminescentes, Rastro & Interação com Raio Elétrico)**:
+    - Vagalumes charmosos cruzam a tela com vôo fluido e orgânico baseado em curvas harmônicas senoidais.
+    - Cada vagalume possui corpo bioluminescente pulsante, núcleo incandescente, asinhas translúcidas e rastro contínuo de partículas douradas cintilantes (*fairy dust*).
+    - **⚡ Interação por Toque**: O jogador pode clicar diretamente nos vagalumes voando! Ao tocar em um vagalume, um **raio elétrico ziguezagueante** é disparado da bolinha azul até ele, acompanhado de efeito sonoro de choque/laser e vibração tátil instantânea.
+    - O vagalume é abatido e **partículas de poeira estelar caem no chão do labirinto**, assentando no piso e **continuando a iluminar o caminho no Fog of War**. O brilho vai enfraquecendo suavemente ao longo de 6 a 8.5 segundos até o local voltar à escuridão total.
+  - **Fase 8 em diante (Labirinto Vivo - Paredes Móveis com Alerta Neutro)**:
     - O labirinto se reconfigura sozinho durante o jogo!
-    - Paredes internas começam a pulsar em cor âmbar de aviso e, após 2.5 segundos, alternam seu estado (abrem ou fecham).
+    - Paredes internas piscam com **cor neutra elegante (platina / slate silver `#CFD8DC`)** antes de abrirem ou fecharem.
+    - **Dificuldade Escalonada**: conforme as fases avançam, a frequência e a velocidade de alternância aumentam (intervalo cai de 6.0s para 2.4s) e mais paredes mudam por vez (de 3 até 6 paredes simultâneas).
     - **Garantia matemática de solvabilidade**: o algoritmo BFS testa a rota antes de confirmar a mudança, impedindo que a bolinha seja encurralada sem saída.
-  - **Fase 10 em diante (Buracos Negros Aleatórios)**:
-    - Vórtices negros surgem e desaparecem periodicamente em posições aleatórias do mapa.
-    - Se a bolinha for sugada por um buraco negro ativo, ela sofre aceleração de sucção, vibração tátil dupla, efeito sonoro descendente e é **teleportada de volta ao ponto inicial da fase**.
+  - **Fase 10 em diante (Vórtices Cinzas & Teletransporte Caótico)**:
+    - Vórtices **100% monocromáticos em tons de cinza**, com braços de acreção espirais giratórios em alta velocidade e singularidade central.
+    - Aparecem e somem aleatoriamente pelo labirinto.
+    - Ao passar por cima de um vórtice, a bolinha é sugada e **teleportada para outra célula aleatória qualquer do mapa** (nunca para a saída verde e nunca para a mesma célula), trazendo imprevisibilidade e dinamismo à partida.
   - **Fase 15 (Grande Vitória)**:
     - Completar a 15ª fase exibe a tela de vitória suprema com arpeggio sonoro e estatísticas completas da campanha.
 
@@ -76,7 +79,8 @@ c:\Users\Misharin\Desktop\Java\
 │       │   │   │   └── ThreadJogo.java          # Loop de simulação desacoplado da UI
 │       │   │   ├── elementos/
 │       │   │   │   ├── Vagalume.java            # Entidade de vagalume com física orgânica e luz
-│       │   │   │   └── BuracoNegro.java         # Vórtice dinâmico com ciclo de vida e sucção
+│       │   │   │   ├── BuracoNegro.java         # Vórtice cinza com animação espiral e sucção
+│       │   │   │   └── ParticulaChao.java       # Partículas de luz caídas no chão (Zero GC via pool)
 │       │   │   ├── engine/
 │       │   │   │   ├── MotorFisico.java         # Dinâmica de movimento, colisões e repouso
 │       │   │   │   ├── ControladorSensores.java # Fusão de sensores, calibração e filtro
@@ -159,13 +163,18 @@ O projeto inclui suíte completa de testes unitários para o motor físico, a ge
 | `testRestingOnWallDoesNotProduceInfiniteHits` | Garante que a esfera em repouso contra a parede não produz sons contínuos |
 | `testWallCollisionConstrainsPosition` | Garante que a esfera nunca penetra paredes |
 | `testGoalDetection` | Valida o disparo da vitória ao atingir a célula final |
-| `testBlackHoleCapturesBallAndResetsToStart` | Garante que o buraco negro ativo teleporta a esfera de volta ao spawn e zera a velocidade |
+| `testBlackHoleCapturesBallAndTeleportsToRandomCell` | Garante que o vórtice cinza ativo teleporta a esfera para outra célula aleatória e zera a velocidade |
+| `testHighSpeedResponsiveness` | Valida a resposta rápida e ágil de aceleração à inclinação |
 | `testInactiveBlackHoleDoesNotCapture` | Garante que buracos em transição inicial não capturam prematuramente |
 | `testShrinkingFogOfWarRadiusFormula` | Valida o encolhimento progressivo do raio de luz da bolinha entre as fases 5 e 15 |
 | `testVagalumeMovementAndFluidFlight` | Valida a dinâmica suave de vôo em curvas harmônicas e limites de tela |
 | `testParticleTrailSpawnsAndRecycles` | Garante nascimento e reciclagem sem vazamentos da pool de partículas do rastro |
 | `testPulseAndWingBeat` | Valida pulso luminoso senoidal do abdômen e batimento das asinhas |
 | `testLifeCycleAndOpacity` | Valida fade-in, sustentação e término de ciclo de vida do vagalume |
+| `testMatarVagalume` | Valida morte imediata do vagalume ao ser atingido pelo raio da bolinha azul |
+| `testParticulaChaoDispersalAndFade` | Valida dispersão, assentamento no chão e esmaecimento gradual da luz emitida pelas partículas |
+| `testWideScatterDispersalDistance` | Garante dispersão ampla das partículas post-mortem sem agrupamento em formato de 'blob' |
+| `testParticleBoundaryConstrainment` | Garante que as partículas em alta velocidade respeitam os limites físicos do labirinto |
 
 ---
 

@@ -195,9 +195,9 @@ public class MotorFisicoTest {
         assertTrue("Objetivo deve ser acionado quando a esfera atinge a célula final", goalReached[0]);
     }
 
-    // Novo: colisão com buraco negro ativo teleporta pro início e zera a velocidade
+    // Buraco negro / vórtice deve capturar a bolinha, zerar velocidade e teleportar pra outra célula aleatória (não pro início nem pro goal)
     @Test
-    public void testBlackHoleCapturesBallAndResetsToStart() {
+    public void testBlackHoleCapturesBallAndTeleportsToRandomCell() {
         final boolean[] captured = {false};
         engine.setCollisionListener(new MotorFisico.ListenerColisao() {
             @Override
@@ -229,13 +229,32 @@ public class MotorFisicoTest {
                 0f, 0f, cellWidth, cellHeight, 10f);
 
         assertTrue("O evento onBlackHoleCaptured deve ser disparado", captured[0]);
-        // Bolinha deve ter voltado para o centro da célula de spawn (0, 0)
-        float expectedStartX = (maze.getStartCol() + 0.5f) * cellWidth;
-        float expectedStartY = (maze.getStartRow() + 0.5f) * cellHeight;
-        assertEquals(expectedStartX, ball.x, 0.01f);
-        assertEquals(expectedStartY, ball.y, 0.01f);
+        // Velocidade deve ter sido zerada após a sucção pelo vórtice
         assertEquals(0f, ball.vx, 0.001f);
         assertEquals(0f, ball.vy, 0.001f);
+
+        // Bolinha deve estar numa célula válida que NÃO seja a célula do buraco (2, 2) e NÃO seja o goal (3, 3)
+        int newCol = (int) (ball.x / cellWidth);
+        int newRow = (int) (ball.y / cellHeight);
+
+        assertTrue("Coluna de teleport deve estar dentro do labirinto", newCol >= 0 && newCol < maze.getCols());
+        assertTrue("Linha de teleport deve estar dentro do labirinto", newRow >= 0 && newRow < maze.getRows());
+        assertFalse("Não deve teleportar para a mesma célula do buraco", newCol == 2 && newRow == 2);
+        assertFalse("Não deve teleportar direto para o objetivo final", newCol == maze.getEndCol() && newRow == maze.getEndRow());
+    }
+
+    // A aceleração e responsividade da bolinha devem ser altas
+    @Test
+    public void testHighSpeedResponsiveness() {
+        ball.reset(50f, 50f, 10f);
+        float roll = 45f;
+        float pitch = 0f;
+        float dt = 0.02f;
+
+        engine.update(ball, maze, roll, pitch, dt, 0, 0, 100f, 100f, 10f);
+
+        // Com TILT_ACCELERATION = 5200f e 45 graus (sin ~ 0.707), vx deve atingir mais de 50px/s em 20ms
+        assertTrue("Aceleração rápida deve dar resposta veloz à inclinação", ball.vx > 50f);
     }
 
     // Buraco negro ainda surgindo (inativo) não deve capturar a bolinha

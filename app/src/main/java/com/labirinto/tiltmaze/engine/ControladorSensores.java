@@ -26,8 +26,8 @@ public class ControladorSensores implements SensorEventListener {
     private float offsetPitch = 0f;
     private float offsetRoll = 0f;
 
-    // Fator do filtro passa-baixa (Low-Pass Filter) calibrado pra resposta rápida e sem atraso
-    private static final float ALPHA = 0.45f;
+    // Fator do filtro passa-baixa ultra responsivo: bolinha responde no mesmo instante sem atraso perceptível
+    private static final float ALPHA = 0.65f;
 
     public ControladorSensores(Context context) {
         sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
@@ -97,9 +97,9 @@ public class ControladorSensores implements SensorEventListener {
         float diffPitch = rawPitch - offsetPitch;
         float diffRoll = rawRoll - offsetRoll;
 
-        // Zona morta reduzida pra 0.4 grau: responde na hora a qualquer leve inclinação da mão!
-        if (Math.abs(diffPitch) < 0.4f) diffPitch = 0f;
-        if (Math.abs(diffRoll) < 0.4f) diffRoll = 0f;
+        // Zona morta mínima de 0.2 grau: qualquer toquezinho de inclinação já move a bolinha
+        if (Math.abs(diffPitch) < 0.2f) diffPitch = 0f;
+        if (Math.abs(diffRoll) < 0.2f) diffRoll = 0f;
 
         // Trava em no máximo 60 graus pra não disparar a velocidade se virar o celular de ponta cabeça
         diffPitch = Math.max(-60f, Math.min(60f, diffPitch));

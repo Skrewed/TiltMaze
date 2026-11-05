@@ -56,6 +56,21 @@ public class GerenciadorVibracao {
         }
     }
 
+    // Vibração tátil seca e imediata do choque elétrico (clique no vagalume)
+    public void vibrateZap() {
+        if (vibrator == null || !vibrator.hasVibrator()) return;
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                vibrator.vibrate(VibrationEffect.createOneShot(22, 220));
+            } catch (Exception ignored) {
+                vibrator.vibrate(22);
+            }
+        } else {
+            vibrator.vibrate(22);
+        }
+    }
+
     // Padrão de vibração comemorativo quando chega no objetivo final
     public void vibrateWin() {
         if (vibrator == null || !vibrator.hasVibrator()) return;

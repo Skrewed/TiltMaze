@@ -5,6 +5,7 @@ import com.labirinto.tiltmaze.maze.CelulaLabirinto;
 import com.labirinto.tiltmaze.maze.Labirinto;
 
 import java.util.List;
+import java.util.Random;
 
 // Nosso motorzinho de física 2D feito em Java.
 // Calcula a velocidade da bolinha com a gravidade da inclinação, atrito no chão,
@@ -18,8 +19,8 @@ public class MotorFisico {
         default void onBlackHoleCaptured() {} // Novo: quando a bolinha cai no buraco negro
     }
 
-    private static final float TILT_ACCELERATION = 3800f; // Força turbinada: bolinha acelera rápido com qualquer inclinação!
-    private static final float FRICTION = 2.4f;          // Atrito ligeiramente menor pro rolamento ficar bem ágil e responsivo
+    private static final float TILT_ACCELERATION = 5200f; // Força hiper-responsiva: resposta ultra rápida à inclinação!
+    private static final float FRICTION = 2.0f;          // Atrito menor pro rolamento ficar bem ágil e solto
     private static final float RESTITUTION = 0.35f;       // Coeficiente de quique (elasticidade)
 
     private static final float RESTITUTION_THRESHOLD = 75f;  // Se tiver muito devagar, não quica (repouso)
@@ -30,6 +31,11 @@ public class MotorFisico {
     private boolean isRestingOnWall = false;
 
     private ListenerColisao listener;
+    private Random random = new Random();
+
+    public void setRandom(Random random) {
+        if (random != null) this.random = random;
+    }
 
     public void setCollisionListener(ListenerColisao listener) {
         this.listener = listener;
@@ -79,7 +85,7 @@ public class MotorFisico {
         ball.vx *= damping;
         ball.vy *= damping;
 
-        float maxSpeed = Math.max(cellWidth, cellHeight) * 16f; // Velocidade máxima mais alta pros reflexos do jogador
+        float maxSpeed = Math.max(cellWidth, cellHeight) * 22f; // Velocidade máxima mais alta e ágil
         float currentSpeed = (float) Math.hypot(ball.vx, ball.vy);
         if (currentSpeed > maxSpeed) {
             float scale = maxSpeed / currentSpeed;
@@ -87,8 +93,8 @@ public class MotorFisico {
             ball.vy *= scale;
         }
 
-        // 3. Sub-passos de integração
-        int subSteps = 3;
+        // 3. Sub-passos de integração (4 sub-passos pra garantir física perfeita em alta velocidade)
+        int subSteps = 4;
         float subDt = dt / subSteps;
         float maxHitIntensity = 0f;
         boolean inContactAny = false;
@@ -117,15 +123,37 @@ public class MotorFisico {
             isRestingOnWall = false;
         }
 
-        // 4. Checa colisão com buracos negros ativos (Fases 10+)
+        // 4. Checa colisão com vórtices cinzas ativos (Fases 10+)
         if (buracos != null && !buracos.isEmpty()) {
             for (BuracoNegro buraco : buracos) {
                 if (buraco.checarCaptura(ball.x, ball.y, ball.radius)) {
-                    // Caiu no buraco negro! Para a bolinha e joga pro início da fase
+                    // Sugada pelo vórtice! Para a velocidade e teleporta pra outro local aleatório do mapa (NÃO pro início!)
                     ball.stop();
-                    float startX = originX + (maze.getStartCol() + 0.5f) * cellWidth;
-                    float startY = originY + (maze.getStartRow() + 0.5f) * cellHeight;
-                    ball.reset(startX, startY, ball.radius);
+
+                    int cols = maze.getCols();
+                    int rows = maze.getRows();
+                    int currCol = Math.max(0, Math.min(cols - 1, (int) ((ball.x - originX) / cellWidth)));
+                    int currRow = Math.max(0, Math.min(rows - 1, (int) ((ball.y - originY) / cellHeight)));
+
+                    // Ponto de fallback caso a grade seja minúscula
+                    int targetCol = (currCol + cols / 2) % cols;
+                    int targetRow = (currRow + rows / 2) % rows;
+
+                    // Sorteia uma célula diferente da célula atual e diferente da saída verde
+                    for (int t = 0; t < 35; t++) {
+                        int rc = random.nextInt(cols);
+                        int rr = random.nextInt(rows);
+                        if ((rc != maze.getEndCol() || rr != maze.getEndRow()) &&
+                            (rc != currCol || rr != currRow)) {
+                            targetCol = rc;
+                            targetRow = rr;
+                            break;
+                        }
+                    }
+
+                    float newX = originX + (targetCol + 0.5f) * cellWidth;
+                    float newY = originY + (targetRow + 0.5f) * cellHeight;
+                    ball.reset(newX, newY, ball.radius);
 
                     if (listener != null) {
                         listener.onBlackHoleCaptured();
@@ -150,7 +178,7 @@ public class MotorFisico {
     private boolean checkIsTouchingAnyWall(Bolinha ball, Labirinto maze, float originX, float originY,
                                           float cellWidth, float cellHeight, float wallThickness) {
         float halfWall = wallThickness / 2f;
-        float touchThreshold = 1.0f;
+        float touchThreshold = 3.5f; // Margem de tolerância em pixels pra evitar micro-quiques repetitivos
 
         float boardLeft = originX + halfWall;
         float boardTop = originY + halfWall;

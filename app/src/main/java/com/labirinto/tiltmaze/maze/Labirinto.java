@@ -156,12 +156,19 @@ public class Labirinto {
         return false;
     }
 
-    // A partir da fase 8: escolhe uma parede interna pra avisar que vai abrir/fechar
+    // A partir da fase 8: escolhe paredes internas pra avisar que vão abrir/fechar
     public void avisarProximaReconfiguracao() {
+        avisarProximaReconfiguracao(3);
+    }
+
+    // Permite mudar mais paredes por vez conforme o nível da fase avança
+    public void avisarProximaReconfiguracao(int qtdParedes) {
         limparAlertas();
 
-        // Tenta achar até 2 paredes internas aleatórias
-        for (int tentativa = 0; tentativa < 20 && paredesEmAlerta.size() < 2; tentativa++) {
+        int meta = Math.max(2, Math.min(6, qtdParedes));
+
+        // Tenta achar paredes internas aleatórias que ainda não estão em alerta
+        for (int tentativa = 0; tentativa < 45 && paredesEmAlerta.size() < meta; tentativa++) {
             int c = random.nextInt(cols);
             int r = random.nextInt(rows);
             boolean ehDireita = random.nextBoolean();
@@ -169,7 +176,7 @@ public class Labirinto {
             if (ehDireita && c < cols - 1) { // Parede interna direita
                 CelulaLabirinto cell = getCell(c, r);
                 CelulaLabirinto vizinho = getCell(c + 1, r);
-                if (cell != null && vizinho != null) {
+                if (cell != null && vizinho != null && !cell.rightWallAlert) {
                     boolean vaiFechar = !cell.rightWall;
                     cell.rightWallAlert = true;
                     vizinho.leftWallAlert = true;
@@ -178,7 +185,7 @@ public class Labirinto {
             } else if (!ehDireita && r < rows - 1) { // Parede interna de baixo
                 CelulaLabirinto cell = getCell(c, r);
                 CelulaLabirinto vizinho = getCell(c, r + 1);
-                if (cell != null && vizinho != null) {
+                if (cell != null && vizinho != null && !cell.bottomWallAlert) {
                     boolean vaiFechar = !cell.bottomWall;
                     cell.bottomWallAlert = true;
                     vizinho.topWallAlert = true;

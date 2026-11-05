@@ -5,6 +5,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import com.labirinto.tiltmaze.elementos.ParticulaChao;
 import com.labirinto.tiltmaze.elementos.Vagalume;
 
 import org.junit.Before;
@@ -96,5 +97,86 @@ public class VagalumeTest {
             vagalume.update(0.016f, 0f, 0f, 500f, 500f);
         }
         assertTrue("Após o tempo total de vida, o vagalume deve ser marcado como morto", vagalume.isMorto());
+    }
+
+    // Ao tomar o raio elétrico (clique), o vagalume deve morrer imediatamente
+    @Test
+    public void testMatarVagalume() {
+        assertFalse("Vagalume deve começar vivo", vagalume.isMorto());
+        vagalume.matar();
+        assertTrue("Vagalume deve morrer imediatamente ao chamar matar()", vagalume.isMorto());
+    }
+
+    // Partículas caídas no chão devem se dispersar, assentar e diminuir a intensidade de luz até sumir
+    @Test
+    public void testParticulaChaoDispersalAndFade() {
+        ParticulaChao p = new ParticulaChao();
+        p.x = 100f;
+        p.y = 100f;
+        p.vx = 50f;
+        p.vy = 50f;
+        p.vida = 0f;
+        p.duracao = 6.0f;
+        p.raio = 3f;
+        p.raioLuz = 80f;
+        p.ativa = true;
+
+        // No início, intensidade deve ser 1.0 (brilho máximo)
+        assertEquals(1.0f, p.getIntensidade(), 0.001f);
+
+        // Atualiza nos primeiros 0.2 segundos (fase de dispersão e assentamento)
+        p.update(0.2f);
+        assertTrue("Partícula deve ter se movido", p.x > 100f && p.y > 100f);
+        assertEquals(1.0f, p.getIntensidade(), 0.001f);
+
+        // Avança até a metade da vida (3.0s)
+        p.update(2.8f);
+        assertTrue("Intensidade deve estar diminuindo", p.getIntensidade() < 1.0f && p.getIntensidade() > 0f);
+
+        // Avança até o fim da vida (6.0s)
+        p.update(3.1f);
+        assertFalse("Partícula deve desativar após atingir a duração total", p.ativa);
+        assertEquals(0f, p.getIntensidade(), 0.001f);
+    }
+
+    // A partícula deve viajar uma distância significativa para não formar aglomerado ('blob')
+    @Test
+    public void testWideScatterDispersalDistance() {
+        ParticulaChao p = new ParticulaChao();
+        p.x = 200f;
+        p.y = 200f;
+        p.vx = 260f; // Velocidade típica de dispersão média
+        p.vy = 0f;
+        p.vida = 0f;
+        p.duracao = 7.0f;
+        p.ativa = true;
+
+        // Atualiza por 0.85 segundos (fase de dispersão completa)
+        for (int i = 0; i < 53; i++) {
+            p.update(0.016f);
+        }
+
+        float distanciaPercorrida = p.x - 200f;
+        // Deve viajar bem mais que os antigos 5-15 pixels, espalhando-se amplamente pelo corredor
+        assertTrue("Partícula deve se dispersar por pelo menos 55 pixels", distanciaPercorrida > 55f);
+    }
+
+    // A partícula deve respeitar a contenção das bordas do labirinto
+    @Test
+    public void testParticleBoundaryConstrainment() {
+        ParticulaChao p = new ParticulaChao();
+        p.x = 480f;
+        p.y = 200f;
+        p.vx = 400f; // Disparando contra a borda direita (maxX = 500f)
+        p.vy = 0f;
+        p.vida = 0f;
+        p.duracao = 7.0f;
+        p.ativa = true;
+
+        for (int i = 0; i < 30; i++) {
+            p.update(0.016f, 0f, 0f, 500f, 500f);
+        }
+
+        assertTrue("A partícula não deve ultrapassar o limite máximo X", p.x <= 500f);
     }
 }

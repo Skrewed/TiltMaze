@@ -83,6 +83,10 @@ public class BuracoNegro {
         return estado;
     }
 
+    public float getTempoAtual() {
+        return tempoAtual;
+    }
+
     public boolean isMorto() {
         return morto;
     }

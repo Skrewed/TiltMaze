@@ -164,6 +164,47 @@ public class GerenciadorSom {
         }).start();
     }
 
+    // Som de choque elétrico / laser disparado ao clicar no vagalume
+    public void playElectricZapSound() {
+        new Thread(() -> {
+            try {
+                int durationMs = 110;
+                int numSamples = (int) (SAMPLE_RATE * (durationMs / 1000.0));
+                short[] buffer = new short[numSamples];
+
+                for (int i = 0; i < numSamples; i++) {
+                    double progress = (double) i / numSamples;
+                    double t = (double) i / SAMPLE_RATE;
+                    // Frequência rápida de choque/laser: desce de 1600Hz para 350Hz
+                    double freq = 1600.0 - 1250.0 * Math.pow(progress, 0.6);
+                    double envelope = Math.pow(1.0 - progress, 1.4);
+                    double sample = (Math.sin(2.0 * Math.PI * freq * t) * 0.75 +
+                            Math.sin(2.0 * Math.PI * (freq * 2.2) * t) * 0.25) * envelope;
+                    buffer[i] = (short) (sample * 17000);
+                }
+
+                AudioTrack zapTrack = new AudioTrack.Builder()
+                        .setAudioAttributes(new AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_GAME)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                                .build())
+                        .setAudioFormat(new AudioFormat.Builder()
+                                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                                .setSampleRate(SAMPLE_RATE)
+                                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                                .build())
+                        .setBufferSizeInBytes(buffer.length * 2)
+                        .setTransferMode(AudioTrack.MODE_STATIC)
+                        .build();
+
+                zapTrack.write(buffer, 0, buffer.length);
+                zapTrack.play();
+                Thread.sleep(durationMs + 30);
+                zapTrack.release();
+            } catch (Exception ignored) {}
+        }).start();
+    }
+
     // Libera a memória do áudio quando fechar a tela
     public void release() {
         synchronized (hitLock) {

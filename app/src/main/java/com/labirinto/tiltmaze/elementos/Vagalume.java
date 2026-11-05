@@ -184,6 +184,11 @@ public class Vagalume {
         return 1.0f;
     }
 
+    // Mata o vagalume na hora quando atingido pelo raio da bolinha azul
+    public void matar() {
+        this.tempoVida = duracaoTotal;
+    }
+
     public boolean isMorto() {
         return tempoVida >= duracaoTotal;
     }
